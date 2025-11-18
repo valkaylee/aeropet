@@ -1,52 +1,39 @@
-# Setup Instructions for Hand Gesture Recognition
+**Setup Instructions for Hand Gesture Recognition**
 
-This guide will help you set up the hand gesture recognition system after cloning the repository.
+1. clone the repository.
 
 ## Prerequisites
-
 - **Python 3.10, 3.11, or 3.12** (Python 3.11 recommended for best TensorFlow compatibility)
 - **pip** (Python package manager)
 
 ## Installation
 
 ### macOS (Recommended - Prevents TensorFlow Hanging)
-
+First Try: 
 ```bash
-# Fix protobuf version first (prevents TensorFlow hanging on macOS)
-pip install protobuf==5.28.3
-
-# Install TensorFlow
-pip install tensorflow
-
-# Install other dependencies
 pip install qai-hub-models numpy pillow opencv-python
+# Then run it via:
+python3 models/mediapipe_hand/gesture_demo.py --camera 0
 ```
+If the program is hanging, it's likely because protobuf and tensorflow versions are conflicting. You need 5.28.3 for protobuf. Scroll to find the fix for the problem 
 
 ### Linux/Windows
-
 ```bash
 # Install TensorFlow
 pip install tensorflow
-
 # Install other dependencies
 pip install qai-hub-models numpy pillow opencv-python
 ```
 
 ## Verify Installation
-
 Test that everything works:
-
 ```bash
 cd models/mediapipe_hand
 python3 test_tensorflow.py
 ```
-
 You should see all tests passing. If you see errors, check the troubleshooting section below.
 
 ## Run the Gesture Demo
-
-### With Camera
-
 ```bash
 python3 models/mediapipe_hand/gesture_demo.py --camera 0
 ```
@@ -55,14 +42,6 @@ python3 models/mediapipe_hand/gesture_demo.py --camera 0
 - `--camera <number>`: Camera device ID (default: 0)
 - `--skip-gesture-classifier`: Skip gesture classification if TensorFlow has issues
 - `--score-threshold <float>`: Detection threshold (default: 0.95, lower = more detections)
-
-### Without Gesture Classification
-
-If TensorFlow is causing issues, you can still use hand detection:
-
-```bash
-python3 models/mediapipe_hand/gesture_demo.py --camera 0 --skip-gesture-classifier
-```
 
 ## Troubleshooting
 
@@ -85,13 +64,6 @@ pip uninstall protobuf tensorflow tensorflow-metal -y
 # Install compatible versions
 pip install protobuf==5.28.3
 pip install tensorflow
-```
-
-**Alternative:** Use Python 3.11 instead of 3.12:
-```bash
-# Install Python 3.11 via Homebrew
-brew install python@3.11
-python3.11 -m pip install protobuf==5.28.3 tensorflow qai-hub-models numpy pillow opencv-python
 ```
 
 ### Camera Not Opening
