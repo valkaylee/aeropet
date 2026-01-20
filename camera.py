@@ -3,7 +3,7 @@ from djitellopy import Tello
 import time
 
 def test_tello_camera():
-    """Test DJI Tello camera feed"""
+    """Test DJI Tello camera feed - view only"""
     
     print("Connecting to Tello...")
     tello = Tello()
@@ -20,8 +20,6 @@ def test_tello_camera():
         
         print("✓ Video stream active")
         print("Press 'q' to quit")
-        print("Press 't' to takeoff")
-        print("Press 'l' to land")
         
         while True:
             # Get frame from Tello
@@ -40,18 +38,10 @@ def test_tello_camera():
             # Show frame
             cv2.imshow("Tello Camera Feed", frame)
             
-            # Handle keypresses
-            key = cv2.waitKey(1) & 0xFF
-            
-            if key == ord('q'):
+            # Press 'q' to quit
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("Quitting...")
                 break
-            elif key == ord('t'):
-                print("Taking off...")
-                tello.takeoff()
-            elif key == ord('l'):
-                print("Landing...")
-                tello.land()
                 
     except KeyboardInterrupt:
         print("\nInterrupted by user")
@@ -61,8 +51,6 @@ def test_tello_camera():
         # Cleanup
         print("Cleaning up...")
         try:
-            if tello.is_flying:
-                tello.land()
             tello.streamoff()
         except:
             pass
