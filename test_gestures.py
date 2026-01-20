@@ -2,7 +2,7 @@
 """
 Tello Drone Gesture Control
 Uses MediaPipe Hand detection and gesture classification to control Tello drone.
-Gestures: OK (left), Pointer (up), Open (backward), Close (land)
+Gestures: Close (left), Pointer (up), Open (backward), OK (land)
 """
 
 import sys
@@ -186,10 +186,10 @@ print("\n" + "="*60)
 print("Gesture Control Active")
 print("="*60)
 print("Gestures:")
-print("  OK → Move LEFT")
+print("  Close → Move LEFT")
 print("  Pointer → Move UP")
 print("  Open → Move BACKWARD")
-print("  Close → LAND")
+print("  OK → LAND")
 print("="*60)
 print("\nShow your hand to the camera...\n")
 
@@ -203,6 +203,7 @@ gesture_history = []
 frame_count = 0
 last_cmd_time = 0
 last_gesture = None
+last_stable_printed = None  # Fixed: proper variable instead of print._last_stable
 
 try:
     while True:
@@ -274,12 +275,12 @@ try:
             if len(gesture_history) > 0:
                 gesture_history.clear()
         
-        # Check for stable gesture (same gesture 3 times in a row)
+        # Check for stable gesture (same gesture 5 times in a row)
         stable_gesture = None
         if len(gesture_history) >= GESTURE_STABILITY_FRAMES:
-            last_three = gesture_history[-GESTURE_STABILITY_FRAMES:]
-            if all(g == last_three[0] for g in last_three):
-                stable_gesture = last_three[0]
+            last_five = gesture_history[-GESTURE_STABILITY_FRAMES:]
+            if all(g == last_five[0] for g in last_five):
+                stable_gesture = last_five[0]
         
         # Display on frame
         display_text = f"Frame: {frame_count} | Hands: {hands_detected}"
@@ -305,14 +306,14 @@ try:
                 print(f"[Frame {frame_count}] Detected: {current_gesture} | History: {gesture_history[-GESTURE_STABILITY_FRAMES:]}")
                 last_gesture = current_gesture
             elif stable_gesture:
-                if stable_gesture != getattr(print, '_last_stable', None):
+                if stable_gesture != last_stable_printed:  # Fixed: use proper variable
                     print(f"[Frame {frame_count}] ✓✓✓ STABLE: {stable_gesture} ✓✓✓")
-                    print._last_stable = stable_gesture
+                    last_stable_printed = stable_gesture  # Fixed: update proper variable
         
         # Execute commands if gesture is stable and cooldown has passed
         now = time.time()
         if stable_gesture and now - last_cmd_time >= COMMAND_COOLDOWN:
-            if stable_gesture == "OK":
+            if stable_gesture == "Close":
                 print(f"→ EXECUTING: {stable_gesture} - Moving LEFT")
                 tello.move_left(20)
                 last_cmd_time = now
@@ -330,7 +331,7 @@ try:
                 last_cmd_time = now
                 gesture_history.clear()
                 last_gesture = None  # Reset to allow new gesture detection
-            elif stable_gesture == "Close":
+            elif stable_gesture == "OK":
                 print(f"→ EXECUTING: {stable_gesture} - LANDING")
                 tello.land()
                 break
