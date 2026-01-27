@@ -3,7 +3,7 @@ from djitellopy import Tello
 import time
 
 def test_tello_camera():
-    """Test DJI Tello camera feed"""
+    """Test DJI Tello camera feed - view only with color/glitch fixes"""
     
     print("Connecting to Tello...")
     tello = Tello()
@@ -20,38 +20,41 @@ def test_tello_camera():
         
         print("✓ Video stream active")
         print("Press 'q' to quit")
-        print("Press 't' to takeoff")
-        print("Press 'l' to land")
         
         while True:
-            # Get frame from Tello
-            frame_read = tello.get_frame_read()
-            frame = frame_read.frame
-            
-            if frame is None:
-                print("No frame received")
+            try:
+                # Get frame from Tello
+                frame_read = tello.get_frame_read()
+                frame = frame_read.frame
+                
+                # Skip invalid frames
+                if frame is None or frame.size == 0:
+                    continue
+                
+                # Verify frame dimensions
+                if frame.shape[0] == 0 or frame.shape[1] == 0:
+                    continue
+                
+                # Fix color space (fixes green/purple tint)
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                
+                # Add info overlay
+                battery = tello.get_battery()
+                cv2.putText(frame, f"Battery: {battery}%", (10, 30),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                # Show frame
+                cv2.imshow("Tello Camera Feed", frame)
+                
+            except Exception as e:
+                # Skip corrupted frames
+                print(f"Frame error (skipping): {e}")
                 continue
             
-            # Add info overlay
-            battery = tello.get_battery()
-            cv2.putText(frame, f"Battery: {battery}%", (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            
-            # Show frame
-            cv2.imshow("Tello Camera Feed", frame)
-            
-            # Handle keypresses
-            key = cv2.waitKey(1) & 0xFF
-            
-            if key == ord('q'):
+            # Press 'q' to quit
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("Quitting...")
                 break
-            elif key == ord('t'):
-                print("Taking off...")
-                tello.takeoff()
-            elif key == ord('l'):
-                print("Landing...")
-                tello.land()
                 
     except KeyboardInterrupt:
         print("\nInterrupted by user")
@@ -61,8 +64,6 @@ def test_tello_camera():
         # Cleanup
         print("Cleaning up...")
         try:
-            if tello.is_flying:
-                tello.land()
             tello.streamoff()
         except:
             pass

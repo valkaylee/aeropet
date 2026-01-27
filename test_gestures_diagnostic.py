@@ -193,10 +193,16 @@ last_print_time = 0
 
 try:
     while True:
+        # Get frame from Tello
         frame = frame_reader.frame
         frame_count += 1
         
+        # Skip invalid frames
         if frame is None or frame.size == 0:
+            continue
+        
+        # Verify frame dimensions
+        if len(frame.shape) != 3 or frame.shape[0] == 0 or frame.shape[1] == 0:
             continue
         
         # Debug: Print frame info on first frame
@@ -204,19 +210,17 @@ try:
             print(f"Frame info: shape={frame.shape}, dtype={frame.dtype}, "
                   f"min={frame.min()}, max={frame.max()}")
         
-        # Ensure frame is in RGB format (Tello might give BGR)
-        if len(frame.shape) == 3 and frame.shape[2] == 3:
-            # Convert BGR to RGB if needed (OpenCV uses BGR, MediaPipe expects RGB)
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        else:
-            frame_rgb = frame
-        
-        # Get raw landmarks for gesture classification
         try:
+            # Tello sends RGB, convert to BGR for display later
+            # But keep RGB for MediaPipe processing
+            frame_rgb = frame.copy()  # Tello already sends RGB
+            
+            # Get raw landmarks for gesture classification
             raw_result = app.predict_landmarks_from_image(frame_rgb, raw_output=True)
             batched_selected_landmarks = raw_result[3]  # Landmarks are at index 3
+            
         except Exception as e:
-            # Skip corrupted frames
+            # Skip corrupted frames silently (reduces console spam)
             if frame_count % 30 == 0:
                 print(f"[Frame {frame_count}] Error processing frame: {e}")
             continue
@@ -252,7 +256,7 @@ try:
             if hands_detected == 0:
                 gesture_history.clear()
         
-        # Print detailed info every frame when gesture changes or every 30 frames
+        # Print detailed info every frame when gesture changes or every 2 seconds
         now = time.time()
         should_print = False
         
@@ -281,7 +285,7 @@ try:
                     id_counts[gid] = id_counts.get(gid, 0) + 1
                 print(f"         ID distribution: {id_counts}")
         
-        # Display on frame
+        # Display on frame (draw on RGB frame, will convert to BGR for display)
         display_lines = [
             f"Frame: {frame_count}",
             f"Hands: {hands_detected}",
@@ -301,25 +305,29 @@ try:
         y_offset = 30
         for i, line in enumerate(display_lines):
             color = (0, 255, 0) if current_gesture and current_gesture != "UNKNOWN" else (0, 165, 255)
-            cv2.putText(frame, line, (10, y_offset + i * 25), 
+            cv2.putText(frame_rgb, line, (10, y_offset + i * 25), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         
         # Highlight expected gestures
         if gesture_id == 0:
-            cv2.putText(frame, "EXPECTED: Open (ID=0)", (10, frame.shape[0] - 60), 
+            cv2.putText(frame_rgb, "EXPECTED: Open (ID=0)", (10, frame_rgb.shape[0] - 60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
         elif gesture_id == 1:
-            cv2.putText(frame, "EXPECTED: Close (ID=1)", (10, frame.shape[0] - 60), 
+            cv2.putText(frame_rgb, "EXPECTED: Close (ID=1)", (10, frame_rgb.shape[0] - 60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
         elif gesture_id == 2:
-            cv2.putText(frame, "EXPECTED: Pointer (ID=2)", (10, frame.shape[0] - 60), 
+            cv2.putText(frame_rgb, "EXPECTED: Pointer (ID=2)", (10, frame_rgb.shape[0] - 60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
         elif gesture_id == 3:
-            cv2.putText(frame, "EXPECTED: OK (ID=3)", (10, frame.shape[0] - 60), 
+            cv2.putText(frame_rgb, "EXPECTED: OK (ID=3)", (10, frame_rgb.shape[0] - 60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
         
-        cv2.imshow("Tello Gesture Diagnostic (NO MOVEMENT)", frame)
+        # Convert RGB to BGR for OpenCV display (fixes green/purple tint)
+        frame_display = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
         
+        cv2.imshow("Tello Gesture Diagnostic (NO MOVEMENT)", frame_display)
+        
+        # Reduce lag with minimal wait time
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("\nExiting...")
             break
@@ -332,8 +340,10 @@ except Exception as e:
     traceback.print_exc()
 
 # Cleanup
-tello.streamoff()
+try:
+    tello.streamoff()
+except:
+    pass
 cv2.destroyAllWindows()
 print(f"\n✓ Done - Processed {frame_count} frames")
 print(f"  Final gesture history: {gesture_history[-10:] if gesture_history else 'None'}")
-
