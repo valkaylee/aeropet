@@ -40,15 +40,20 @@ def load_training_data(csv_path: str):
     
     with open(csv_path, 'r', encoding='utf-8') as f:
         reader = csv.reader(f)
-        header = next(reader)  # Skip header
-        
+
         for row in reader:
             if len(row) < 43:  # label + 42 features
                 continue
-            
-            label = int(row[0])
+
+            # Skip header rows or malformed rows
+            try:
+                label = int(row[0])
+            except ValueError:
+                # Skip rows where first column isn't a number (e.g., header)
+                continue
+
             features = [float(x) for x in row[1:43]]  # 42 features
-            
+
             X.append(features)
             y.append(label)
     
@@ -58,8 +63,10 @@ def load_training_data(csv_path: str):
     print(f"Loaded {len(X)} samples")
     print(f"Features shape: {X.shape}")
     print(f"Labels shape: {y.shape}")
-    print(f"Number of classes: {len(np.unique(y))}")
-    print(f"Class distribution: {np.bincount(y)}")
+    print(f"Unique labels: {np.unique(y)}")
+    print(f"Number of classes needed: {int(np.max(y)) + 1}")
+    # Use minlength to handle sparse labels (e.g., only label 6)
+    print(f"Class distribution: {np.bincount(y, minlength=int(np.max(y)) + 1)}")
     
     return X, y
 
@@ -118,8 +125,8 @@ def train_model(X, y, output_path: str, epochs: int = 100, batch_size: int = 32,
     print(f"\nTraining set: {len(X_train)} samples")
     print(f"Validation set: {len(X_val)} samples")
     
-    # Get number of classes
-    num_classes = len(np.unique(y))
+    # Get number of classes (use max label + 1 to handle sparse labels)
+    num_classes = int(np.max(y)) + 1
     
     # Create model
     print("\nCreating model...")
@@ -154,14 +161,29 @@ def train_model(X, y, output_path: str, epochs: int = 100, batch_size: int = 32,
     
     # Convert to TFLite
     print(f"\nConverting to TFLite format...")
-    converter = tf.lite.TFLiteConverter.from_keras_model(model)
-    tflite_model = converter.convert()
-    
-    # Save TFLite model
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    import shutil
+    temp_saved_model_dir = output_path.replace('.tflite', '_saved_model')
+
+    # Keras 3 uses export() for SavedModel format
+    try:
+        model.export(temp_saved_model_dir)
+    except AttributeError:
+        # Fallback for older Keras
+        model.save(temp_saved_model_dir)
+
+    # Convert from SavedModel to TFLite
+    converter = tf.lite.TFLiteConverter.from_saved_model(temp_saved_model_dir)
+    tflite_model = converter.convert()
+
+    # Save TFLite model
     with open(output_path, 'wb') as f:
         f.write(tflite_model)
-    
+
+    # Clean up temp SavedModel directory
+    shutil.rmtree(temp_saved_model_dir, ignore_errors=True)
+
     print(f"✓ Model saved to: {output_path}")
     print(f"  Model size: {len(tflite_model) / 1024:.2f} KB")
     

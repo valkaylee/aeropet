@@ -54,7 +54,7 @@ See [SETUP_INSTRUCTIONS.md](models/mediapipe_hand/SETUP_INSTRUCTIONS.md) for det
     models/mediapipe_hand/model/keypoint_classifier/keypoint_classifier_label.csv:
     
 2. Collect training data:
-    python models/mediapipe_hand/collect_training_data.py --camera 0
+    python3 models/mediapipe_hand/collect_training_data.py --camera 0
     
 - Press k to enter logging mode
 - Make your gesture, press the number key (e.g., 4 for ThumbsUp)
@@ -62,12 +62,12 @@ See [SETUP_INSTRUCTIONS.md](models/mediapipe_hand/SETUP_INSTRUCTIONS.md) for det
 - Press q when done
 1. Train the model:
     
-    python models/mediapipe_hand/train_gesture_classifier.py --epochs 150
+    python3 models/mediapipe_hand/train_gesture_classifier.py --epochs 150
     
     This overwrites keypoint_classifier.tflite with your new model.
     
 2. Test it:
-    python models/mediapipe_hand/gesture_demo.py --camera 0
+    python3 models/mediapipe_hand/gesture_demo.py --camera 0
     
 Key Detail
 
