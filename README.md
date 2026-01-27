@@ -46,3 +46,32 @@ Hand gesture recognition system using Qualcomm AI Hub's MediaPipe Hand with kini
 - NumPy, Pillow
 
 See [SETUP_INSTRUCTIONS.md](models/mediapipe_hand/SETUP_INSTRUCTIONS.md) for detailed requirements and installation steps.
+
+
+## start commands
+
+1. Add your new gesture labels to
+    models/mediapipe_hand/model/keypoint_classifier/keypoint_classifier_label.csv:
+    
+2. Collect training data:
+    python models/mediapipe_hand/collect_training_data.py --camera 0
+    
+- Press k to enter logging mode
+- Make your gesture, press the number key (e.g., 4 for ThumbsUp)
+- Collect 50-100 samples per gesture, varying angle/distance
+- Press q when done
+1. Train the model:
+    
+    python models/mediapipe_hand/train_gesture_classifier.py --epochs 150
+    
+    This overwrites keypoint_classifier.tflite with your new model.
+    
+2. Test it:
+    python models/mediapipe_hand/gesture_demo.py --camera 0
+    
+Key Detail
+
+The collection script uses the same preprocess_landmark() function that's used during inference, so the
+training data format exactly matches what the model sees at runtime. This is the critical part that
+
+makes it compatible with kinivi's workflow.
