@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """
-Tello Gesture Detection Diagnostic Tool
+Tello Gesture Detection Diagnostic Tool (7 Gestures)
 Uses Tello camera to detect and classify gestures WITHOUT moving the drone.
 Shows detailed debug output to identify classification issues.
+
+Gestures (ID -> Label -> Meaning):
+0 -> Open    -> backward
+1 -> Close   -> done
+2 -> Pointer -> up
+3 -> Four    -> forward
+4 -> Peace   -> right
+5 -> YOLO    -> down
+6 -> El      -> left
 """
 
 import sys
@@ -42,6 +51,20 @@ except Exception as e:
     sys.exit(1)
 
 # ===============================
+#  EXPECTED GESTURE SET (7 total)
+#  IMPORTANT: IDs MUST match your CSV label order
+# ===============================
+EXPECTED_GESTURES = {
+    0: ("Open", "backward"),
+    1: ("Close", "done"),
+    2: ("Pointer", "up"),
+    3: ("Four", "forward"),
+    4: ("Peace", "right"),
+    5: ("YOLO", "down"),
+    6: ("El", "left"),
+}
+
+# ===============================
 #  LOAD MODELS
 # ===============================
 print("\nLoading MediaPipe Hand model...")
@@ -68,16 +91,30 @@ try:
     if not os.path.exists(label_path):
         print(f"ERROR: Label file not found at {label_path}")
         sys.exit(1)
-    
+
     keypoint_classifier = KeyPointClassifier(model_path=model_path)
     gesture_labels = load_gesture_labels(label_path)
-    
+
     # Normalize labels: strip whitespace + BOM (\ufeff)
     gesture_labels = [label.strip().lstrip("\ufeff") for label in gesture_labels]
-    
-    print(f"✓ Gesture classifier loaded.")
+
+    print("✓ Gesture classifier loaded.")
     print(f"  Label mapping: {dict(enumerate(gesture_labels))}")
     print(f"  Available gestures: {', '.join(gesture_labels)}")
+
+    # Sanity checks for 7-gesture setup
+    if len(gesture_labels) < 7:
+        print("⚠️  WARNING: label file has fewer than 7 labels. IDs may not match.")
+    else:
+        mismatches = []
+        for gid, (expected_name, _) in EXPECTED_GESTURES.items():
+            if gid < len(gesture_labels) and gesture_labels[gid] != expected_name:
+                mismatches.append((gid, expected_name, gesture_labels[gid]))
+        if mismatches:
+            print("⚠️  WARNING: EXPECTED_GESTURES does not match your CSV label order:")
+            for gid, expected, actual in mismatches:
+                print(f"     ID {gid}: expected '{expected}' but CSV has '{actual}'")
+            print("     Fix by reordering your CSV or updating EXPECTED_GESTURES.")
 except Exception as e:
     print(f"ERROR loading gesture classifier: {e}")
     import traceback
@@ -87,52 +124,53 @@ except Exception as e:
 # ===============================
 #  GESTURE CLASSIFICATION FUNCTION
 # ===============================
-def classify_gesture(landmarks: np.ndarray, debug=False) -> tuple:
+def classify_gesture(landmarks: np.ndarray, debug: bool = False) -> tuple:
     """
     Classify hand gesture from landmarks using the gesture classifier.
-    
+
     Args:
         landmarks: numpy array of shape (21, 3) with (x, y, z) coordinates
         debug: If True, print detailed debug info
-        
+
     Returns:
-        Tuple of (gesture_label, gesture_id, confidence_info)
+        Tuple of (gesture_label, gesture_id, info)
     """
     if landmarks.shape != (21, 3):
         return ("UNKNOWN", -1, "Wrong shape")
-    
+
     try:
-        # Debug: Show landmark ranges
         if debug:
-            print(f"      Landmark ranges: X=[{landmarks[:, 0].min():.3f}, {landmarks[:, 0].max():.3f}], "
-                  f"Y=[{landmarks[:, 1].min():.3f}, {landmarks[:, 1].max():.3f}], "
-                  f"Z=[{landmarks[:, 2].min():.3f}, {landmarks[:, 2].max():.3f}]")
-        
-        # Preprocess landmarks for the classifier
+            print(
+                f"      Landmark ranges: X=[{landmarks[:, 0].min():.3f}, {landmarks[:, 0].max():.3f}], "
+                f"Y=[{landmarks[:, 1].min():.3f}, {landmarks[:, 1].max():.3f}], "
+                f"Z=[{landmarks[:, 2].min():.3f}, {landmarks[:, 2].max():.3f}]"
+            )
+
         preprocessed_landmarks = preprocess_landmark(landmarks)
-        
-        # Validate preprocessed landmarks (model expects 42 features: 21 landmarks * 2 coords)
+
+        # Model expects 42 features (21 landmarks * 2 coords)
         if preprocessed_landmarks.shape[0] != 42:
             return ("UNKNOWN", -1, f"Wrong preprocessed shape: {preprocessed_landmarks.shape}")
-        
-        # Debug: Show preprocessed ranges
+
         if debug:
-            print(f"      Preprocessed range: [{preprocessed_landmarks.min():.3f}, {preprocessed_landmarks.max():.3f}]")
-        
-        # Classify gesture
+            print(
+                f"      Preprocessed range: [{preprocessed_landmarks.min():.3f}, "
+                f"{preprocessed_landmarks.max():.3f}]"
+            )
+
         gesture_id = keypoint_classifier(preprocessed_landmarks)
-        
-        # Get gesture label
+
         if 0 <= gesture_id < len(gesture_labels):
             label = gesture_labels[gesture_id].strip().lstrip("\ufeff")
             return (label, gesture_id, "OK")
         else:
             return ("UNKNOWN", gesture_id, f"Invalid ID: {gesture_id}, max: {len(gesture_labels)-1}")
+
     except Exception as e:
         return ("UNKNOWN", -1, f"Error: {e}")
 
 # ===============================
-#  CONNECT TO TELLO (NO TAKEOFF)
+#  CONNECT TO TELLO (NO TAKEOFF / NO MOVEMENT)
 # ===============================
 print("\nInitializing Tello connection...")
 print("⚠️  Make sure you are connected to the Tello's WiFi network!")
@@ -144,7 +182,7 @@ print("Testing network connectivity to Tello (192.168.10.1)...")
 try:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(2)
-    sock.connect(('192.168.10.1', 8889))
+    sock.connect(("192.168.10.1", 8889))
     sock.close()
     print("✓ Network connectivity test passed")
 except Exception as e:
@@ -158,25 +196,28 @@ except Exception as e:
 try:
     tello = Tello()
     print("✓ Tello object created")
-    
+
     print("Connecting to Tello...")
     tello.connect()
     battery = tello.get_battery()
     print(f"✓ Connected to Tello. Battery: {battery}%")
-    
+
     if battery < 20:
         print("⚠️  WARNING: Battery is low!")
-    
+
     print("Starting video stream...")
     tello.streamon()
     time.sleep(2)  # Give stream time to start
     frame_reader = tello.get_frame_read()
     print("✓ Video stream started")
-    print("\n" + "="*70)
-    print("DIAGNOSTIC MODE - NO DRONE MOVEMENT")
-    print("="*70)
+
+    print("\n" + "=" * 80)
+    print("DIAGNOSTIC MODE - CAMERA ONLY (NO TAKEOFF / NO MOVEMENT)")
+    print("=" * 80)
     print("Show gestures to the camera. Press 'q' to quit.")
-    print("="*70 + "\n")
+    print("Expected gestures: Open, Close, Pointer, Four, Peace, YOLO, El")
+    print("=" * 80 + "\n")
+
 except Exception as e:
     print(f"ERROR connecting to Tello: {e}")
     import traceback
@@ -189,146 +230,163 @@ except Exception as e:
 frame_count = 0
 gesture_history = []
 last_gesture = None
-last_print_time = 0
+last_print_time = 0.0
 
 try:
     while True:
-        # Get frame from Tello
         frame = frame_reader.frame
         frame_count += 1
-        
+
         # Skip invalid frames
         if frame is None or frame.size == 0:
             continue
-        
+
         # Verify frame dimensions
         if len(frame.shape) != 3 or frame.shape[0] == 0 or frame.shape[1] == 0:
             continue
-        
-        # Debug: Print frame info on first frame
+
         if frame_count == 1:
-            print(f"Frame info: shape={frame.shape}, dtype={frame.dtype}, "
-                  f"min={frame.min()}, max={frame.max()}")
-        
+            print(
+                f"Frame info: shape={frame.shape}, dtype={frame.dtype}, "
+                f"min={frame.min()}, max={frame.max()}"
+            )
+
+        # Tello frames are RGB
+        frame_rgb = frame.copy()
+
+        # Detect landmarks
         try:
-            # Tello sends RGB, convert to BGR for display later
-            # But keep RGB for MediaPipe processing
-            frame_rgb = frame.copy()  # Tello already sends RGB
-            
-            # Get raw landmarks for gesture classification
             raw_result = app.predict_landmarks_from_image(frame_rgb, raw_output=True)
-            batched_selected_landmarks = raw_result[3]  # Landmarks are at index 3
-            
+            batched_selected_landmarks = raw_result[3]  # Landmarks at index 3
         except Exception as e:
-            # Skip corrupted frames silently (reduces console spam)
             if frame_count % 30 == 0:
                 print(f"[Frame {frame_count}] Error processing frame: {e}")
             continue
-        
-        # Process detected hands
+
         current_gesture = None
         gesture_id = -1
-        confidence_info = ""
+        info = ""
         hands_detected = 0
-        
+
+        # Classify first detected hand only
         for landmarks_tensor in batched_selected_landmarks:
             if landmarks_tensor.nelement() != 0:
                 landmarks_np = landmarks_tensor.cpu().numpy()
                 hands_detected += landmarks_np.shape[0]
-                
-                # Process first hand only
+
                 if landmarks_np.shape[0] > 0:
                     hand_landmarks = landmarks_np[0]
                     if hand_landmarks.shape == (21, 3):
-                        # Debug mode when gesture changes or every 30 frames
-                        debug_mode = (current_gesture is None or 
-                                     (frame_count % 30 == 0 and current_gesture != "UNKNOWN"))
-                        current_gesture, gesture_id, confidence_info = classify_gesture(
-                            hand_landmarks, debug=debug_mode)
-                        break  # Use first hand only
-        
+                        debug_mode = (current_gesture is None) or (frame_count % 30 == 0)
+                        current_gesture, gesture_id, info = classify_gesture(
+                            hand_landmarks, debug=debug_mode
+                        )
+                        break
+
         # Update gesture history
         if current_gesture and current_gesture != "UNKNOWN":
             gesture_history.append((current_gesture, gesture_id))
-            if len(gesture_history) > 10:  # Keep last 10 for analysis
+            if len(gesture_history) > 10:
                 gesture_history.pop(0)
         else:
             if hands_detected == 0:
                 gesture_history.clear()
-        
-        # Print detailed info every frame when gesture changes or every 2 seconds
+
+        # Print status when gesture changes or every 2 seconds
         now = time.time()
         should_print = False
-        
-        if current_gesture and current_gesture != last_gesture:
+
+        if current_gesture != last_gesture:
             should_print = True
             last_gesture = current_gesture
-        elif now - last_print_time > 2.0:  # Print status every 2 seconds
+        elif now - last_print_time > 2.0:
             should_print = True
             last_print_time = now
-        
+
         if should_print:
             gesture_str = current_gesture if current_gesture else "None"
-            print(f"[Frame {frame_count:4d}] Hands: {hands_detected} | "
-                  f"Gesture ID: {gesture_id:2d} | Label: '{gesture_str:8s}' | "
-                  f"Info: {confidence_info}")
+            print(
+                f"[Frame {frame_count:4d}] Hands: {hands_detected} | "
+                f"Gesture ID: {gesture_id:2d} | Label: '{gesture_str:10s}' | Info: {info}"
+            )
+
             if gesture_history:
-                recent = gesture_history[-5:]  # Show last 5
+                recent = gesture_history[-5:]
                 ids = [g[1] for g in recent]
                 labels = [g[0] for g in recent]
                 print(f"         Recent history: IDs={ids} | Labels={labels}")
-            
-            # Show statistics
-            if gesture_history:
+
                 id_counts = {}
                 for g, gid in gesture_history:
                     id_counts[gid] = id_counts.get(gid, 0) + 1
                 print(f"         ID distribution: {id_counts}")
-        
-        # Display on frame (draw on RGB frame, will convert to BGR for display)
+
+        # ===============================
+        #  DRAW OVERLAY TEXT
+        # ===============================
         display_lines = [
             f"Frame: {frame_count}",
             f"Hands: {hands_detected}",
         ]
-        
+
         if current_gesture:
             display_lines.append(f"Gesture ID: {gesture_id}")
             display_lines.append(f"Label: {current_gesture}")
-            if confidence_info != "OK":
-                display_lines.append(f"Info: {confidence_info}")
-        
-        # Show recent history
+            if info != "OK":
+                display_lines.append(f"Info: {info}")
+
         if gesture_history:
             recent_ids = [str(g[1]) for g in gesture_history[-5:]]
             display_lines.append(f"Recent IDs: {','.join(recent_ids)}")
-        
+
         y_offset = 30
         for i, line in enumerate(display_lines):
             color = (0, 255, 0) if current_gesture and current_gesture != "UNKNOWN" else (0, 165, 255)
-            cv2.putText(frame_rgb, line, (10, y_offset + i * 25), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-        
-        # Highlight expected gestures
-        if gesture_id == 0:
-            cv2.putText(frame_rgb, "EXPECTED: Open (ID=0)", (10, frame_rgb.shape[0] - 60), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        elif gesture_id == 1:
-            cv2.putText(frame_rgb, "EXPECTED: Close (ID=1)", (10, frame_rgb.shape[0] - 60), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        elif gesture_id == 2:
-            cv2.putText(frame_rgb, "EXPECTED: Pointer (ID=2)", (10, frame_rgb.shape[0] - 60), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        elif gesture_id == 3:
-            cv2.putText(frame_rgb, "EXPECTED: OK (ID=3)", (10, frame_rgb.shape[0] - 60), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        
-        # Convert RGB to BGR for OpenCV display (fixes green/purple tint)
+            cv2.putText(
+                frame_rgb,
+                line,
+                (10, y_offset + i * 25),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                color,
+                2,
+            )
+
+        # Show expected gesture + direction if ID is one of the 7
+        if gesture_id in EXPECTED_GESTURES:
+            name, direction = EXPECTED_GESTURES[gesture_id]
+            cv2.putText(
+                frame_rgb,
+                f"EXPECTED: {name}  ->  {direction.upper()} (ID={gesture_id})",
+                (10, frame_rgb.shape[0] - 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 255),
+                2,
+            )
+
+        # Also show the full mapping on-screen (small)
+        mapping_lines = [
+            "0 Open=BACK  1 Close=DONE  2 Pointer=UP",
+            "3 Four=FWD   4 Peace=RIGHT 5 YOLO=DOWN  6 El=LEFT",
+        ]
+        base_y = frame_rgb.shape[0] - 30
+        for j, mline in enumerate(mapping_lines[::-1]):
+            cv2.putText(
+                frame_rgb,
+                mline,
+                (10, base_y - j * 22),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (255, 255, 255),
+                2,
+            )
+
+        # Convert RGB to BGR for OpenCV display
         frame_display = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-        
-        cv2.imshow("Tello Gesture Diagnostic (NO MOVEMENT)", frame_display)
-        
-        # Reduce lag with minimal wait time
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        cv2.imshow("Tello Gesture Diagnostic (CAMERA ONLY)", frame_display)
+
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             print("\nExiting...")
             break
 
@@ -339,11 +397,14 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 
-# Cleanup
+# ===============================
+#  CLEANUP
+# ===============================
 try:
     tello.streamoff()
-except:
+except Exception:
     pass
+
 cv2.destroyAllWindows()
 print(f"\n✓ Done - Processed {frame_count} frames")
 print(f"  Final gesture history: {gesture_history[-10:] if gesture_history else 'None'}")
