@@ -127,13 +127,7 @@ except Exception as e:
 def classify_gesture(landmarks: np.ndarray, debug: bool = False) -> tuple:
     """
     Classify hand gesture from landmarks using the gesture classifier.
-
-    Args:
-        landmarks: numpy array of shape (21, 3) with (x, y, z) coordinates
-        debug: If True, print detailed debug info
-
-    Returns:
-        Tuple of (gesture_label, gesture_id, info)
+    Returns: (gesture_label, gesture_id, info)
     """
     if landmarks.shape != (21, 3):
         return ("UNKNOWN", -1, "Wrong shape")
@@ -187,10 +181,6 @@ try:
     print("✓ Network connectivity test passed")
 except Exception as e:
     print(f"✗ Network connectivity test failed: {e}")
-    print("\nTroubleshooting tips:")
-    print("  1. Make sure the Tello is powered ON")
-    print("  2. Verify you're connected to the Tello WiFi (check WiFi settings)")
-    print("  3. Try disconnecting and reconnecting to the Tello WiFi")
     sys.exit(1)
 
 try:
@@ -251,6 +241,11 @@ try:
                 f"min={frame.min()}, max={frame.max()}"
             )
 
+        # -------------------------------
+        # ✅ ONLY CHANGE: mirror horizontally
+        # -------------------------------
+        frame = cv2.flip(frame, 1)
+
         # Tello frames are RGB
         frame_rgb = frame.copy()
 
@@ -310,17 +305,6 @@ try:
                 f"Gesture ID: {gesture_id:2d} | Label: '{gesture_str:10s}' | Info: {info}"
             )
 
-            if gesture_history:
-                recent = gesture_history[-5:]
-                ids = [g[1] for g in recent]
-                labels = [g[0] for g in recent]
-                print(f"         Recent history: IDs={ids} | Labels={labels}")
-
-                id_counts = {}
-                for g, gid in gesture_history:
-                    id_counts[gid] = id_counts.get(gid, 0) + 1
-                print(f"         ID distribution: {id_counts}")
-
         # ===============================
         #  DRAW OVERLAY TEXT
         # ===============================
@@ -365,7 +349,6 @@ try:
                 2,
             )
 
-        # Also show the full mapping on-screen (small)
         mapping_lines = [
             "0 Open=BACK  1 Close=DONE  2 Pointer=UP",
             "3 Four=FWD   4 Peace=RIGHT 5 YOLO=DOWN  6 El=LEFT",

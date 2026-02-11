@@ -44,7 +44,7 @@ GESTURE_ACTIONS = {
     "Peace":   ("move_right", 20),
     "YOLO":    ("move_down", 20),
     "El":      ("move_left", 20),
-    "Close":   ("hover", 0),   # no movement
+    "Close":   ("hover", 0),
 }
 
 # ===============================
@@ -60,6 +60,7 @@ model_dir = os.path.join(current_dir, 'models', 'mediapipe_hand', 'model', 'keyp
 keypoint_classifier = KeyPointClassifier(
     model_path=os.path.join(model_dir, 'keypoint_classifier.tflite')
 )
+
 gesture_labels = [
     g.strip().lstrip("\ufeff")
     for g in load_gesture_labels(os.path.join(model_dir, 'keypoint_classifier_label.csv'))
@@ -101,7 +102,7 @@ time.sleep(2)
 # ===============================
 #  CONTROL PARAMETERS
 # ===============================
-STABLE_FRAMES = 3          # ← CHANGED FROM 5 TO 3
+STABLE_FRAMES = 3
 COMMAND_COOLDOWN = 1.5
 gesture_history = []
 last_cmd_time = 0
@@ -114,6 +115,9 @@ try:
         frame = frame_reader.frame
         if frame is None:
             continue
+
+        # ✅ ONLY CHANGE: mirror horizontally
+        frame = cv2.flip(frame, 1)
 
         raw = app.predict_landmarks_from_image(frame, raw_output=True)
         landmarks_batch = raw[3]
@@ -159,9 +163,7 @@ try:
                 cmd, val = action
                 print(f"EXECUTE → {stable.upper()}")
 
-                if cmd == "hover":
-                    pass
-                else:
+                if cmd != "hover":
                     getattr(tello, cmd)(val)
 
                 last_cmd_time = now
