@@ -4,7 +4,7 @@ Tello Drone Gesture Control (7 Gestures)
 
 Gestures → Actions:
 Open    → backward
-Close   → done (hover / no move)
+Close   → done, land (hover / no move)
 Pointer → up
 Four    → forward
 Peace   → right
@@ -116,7 +116,7 @@ try:
         if frame is None:
             continue
 
-        # ✅ ONLY CHANGE: mirror horizontally
+        #  mirror horizontally
         frame = cv2.flip(frame, 1)
 
         raw = app.predict_landmarks_from_image(frame, raw_output=True)

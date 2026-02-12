@@ -241,9 +241,7 @@ try:
                 f"min={frame.min()}, max={frame.max()}"
             )
 
-        # -------------------------------
-        # ✅ ONLY CHANGE: mirror horizontally
-        # -------------------------------
+        # mirror horizontally 
         frame = cv2.flip(frame, 1)
 
         # Tello frames are RGB
