@@ -18,9 +18,9 @@ if battery < 20:
 print("Taking off...")
 tello.takeoff()
 
-# Hover for 5 seconds
-print("Hovering for 5 seconds...")
-time.sleep(5)
+# # Hover for 2 seconds
+# print("Hovering for 2 seconds...")
+# time.sleep(2)
 
 # Land
 print("Landing...")
